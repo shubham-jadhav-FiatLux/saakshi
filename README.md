@@ -111,7 +111,7 @@ The maths, with worked test cases: [low-level design §5](docs/low-level-design.
 ## 6. Built for Bharat
 - **All 22 scheduled languages + English.** Each person speaks and listens in their own language.
   - Assamese, Bengali, Bodo, Dogri, Gujarati, Hindi, Kannada, Kashmiri, Konkani, Maithili, Malayalam, Manipuri, Marathi, Nepali, Odia, Punjabi, Sanskrit, Santali, Sindhi, Tamil, Telugu, Urdu, and English.
-  - Native speakers review Hindi, Bengali, Kannada, Tamil and English first; the rest follow as pilots grow.
+  - Native speakers review Hindi, Bengali, Kannada, Marathi, Tamil and English first; the rest follow as pilots grow.
 - **Voice first, buttons as a fallback,** for people with limited literacy and 14-hour working days.
 - **Entry-level Android and patchy networks.** The jeweller's app works offline.
 - **Assisted mode.** JanAI Café operators and Saakshi points (testing shops, hallmarking centres, association desks) can onboard people and confirm on their behalf, with consent.

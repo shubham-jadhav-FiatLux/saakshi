@@ -521,8 +521,8 @@ models.read_image(image, schema) -> {data, confidence}
 
 | Tier | Meaning | Languages |
 |---|---|---|
-| **A** | A native speaker reviewed every P0 key; tested with real users | Hindi, Bengali, Kannada, Tamil, English |
-| **B** | One native reviewer; the voice checked by ear | Telugu, Malayalam, Marathi, Gujarati, Punjabi, Odia, Urdu |
+| **A** | A native speaker reviewed every P0 key; tested with real users | Hindi, Bengali, Kannada, Marathi, Tamil, English |
+| **B** | One native reviewer; the voice checked by ear | Telugu, Malayalam, Gujarati, Punjabi, Odia, Urdu |
 | **C** | Translated catalog with a round-trip check; marked **beta** | Assamese, Nepali, Konkani, Maithili, Manipuri (Meitei), Bodo, Dogri, Santali, Sindhi, Sanskrit |
 | **D** | Experimental | Kashmiri |
 
