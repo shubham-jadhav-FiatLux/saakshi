@@ -23,10 +23,11 @@
 | `app` | 1 | Jeweller app screens and the offline capture queue | Captures → `POST /captures` |
 | `console` | 1 | Case timeline, chain verifier, operator tasks, assisted confirmation, language gallery, demo clock | — |
 | `inbox` | 1 → 3 | Turns inbound messages into domain events | Inbox row → `InboundAudio`, `InboundImage`, `InboundButton`, `InboundText`, `DeliveryStatus` |
-| `voice` | 2 | Voice-to-text with language detection; spoken output; the number, unit and date verbaliser | Audio → transcript + English gloss; text → audio |
-| `interpret` | 2 | Yes/no fast path; reply interpreter for everything else; clarification questions | Transcript → intent + details + confidence |
-| `photo` | 2 | Scale-photo reader, purity reader, replay detection, fallbacks | Image → reading (mg or ppm) + checks |
+| `voice` | 2 | Speech-to-text with language detection; text-to-speech; the number, unit and date verbaliser | Audio → transcript + English gloss; text → audio |
+| `interpret` | 2 | Yes/no fast path; an LLM with a strict schema for everything else; clarification questions | Transcript → intent + details + confidence |
+| `photo` | 2 | Vision-model scale-photo reader, purity reader, replay detection, fallbacks | Image → reading (mg or ppm) + checks |
 | `engine` | 3 | Case router, pure handlers, executor, timers, outbox | Domain event → transition + actions |
+| `agent` | 3 | The LLM reasoning loop for exceptions (§7.6): context builder, tool registry, loop runner, stop rules | Trigger + case → tool calls → proposals and messages |
 | `planner` | 3 | Back-planning, karigar ranking, re-plan validation | Order + constraints → plan, ranked karigars, valid options |
 | `reconcile` | 3 | Fine-gold maths, uncertainty, verdicts, noise rule, drift (P1) | Movements + agreement → result |
 | `settle` | 3 | Statement maths and payment orchestration | Jobs + agreement → statement, payment request |
@@ -37,6 +38,7 @@
 | `catalog` | × | Message catalogs per language, with review status | Key + parameters + language → display text and speech form |
 | `render` | × | Cards in every script, narrated video, voice notes, caching | Text + data → PNG, MP4, voice note |
 | `partners` | × | UPI links, payout adapter, hallmarking adapter, lender verification | — |
+| `models` | × | One model adapter over the LLM, speech and vision models; model set-ups and per-task routing (§7.7) | Task + input → output, usage and cost |
 | `audit` | × | Append-only timeline of every event, decision, approval, timer and outside call | — |
 
 ## 3. Data design
@@ -378,11 +380,92 @@ stateDiagram-v2
 - **Concurrency:** the case row is locked for the transition, and its `version` is checked.
 - **Idempotency keys:** inbox → the provider's message ID; outbox → `idempotency_key`; captures → the app's client UUID; ledger → one event per movement confirmation; payouts → the settlement ID.
 
+### 7.6 The agent loop
+Routine events go straight to the pure handlers in §7.2. An event that needs judgement starts an agent run instead, in a background job:
+- an `Interpreted` reply with `needs_clarification`;
+- an `overdue` or `checkin` timer with a reported slip;
+- a `dispute_claim`;
+- silence after the fallback ladder.
+
+The agent's results come back to the engine as ordinary actions, so the same executor, policy gate and audit apply.
+
+```text
+run_agent(case_id, trigger):
+    ctx   = build_context(case_id, trigger)      -- see "Context" below
+    steps = 0
+    loop:
+        out = models.complete(route="agent", context=ctx, tools=TOOLS)
+        if out.stop in (refusal, max_tokens) or out.invalid: return fallback(case_id, trigger)
+        if out.kind == "final":  return out.reply_or_nothing
+        for call in out.tool_calls:                -- usually one
+            validate(call, TOOLS[call.name].schema)  -- strict JSON schema; reject unknown fields
+            result = policy.dispatch(call, case_id)  -- runs, creates a pending record, or asks for approval
+            audit("agent.tool", call, result)
+            ctx.append(observation(call, result))
+        steps += 1
+        if steps >= 6 or elapsed > 60 s: return fallback(case_id, trigger)
+```
+
+**Context**, ordered so that the stable part can be cached:
+1. the system instructions and the tool definitions (byte-stable);
+2. the jeweller's profile;
+3. the case summary plus the last 20 events;
+4. the trigger.
+
+The event log is the authoritative memory. The summary is LLM-written, only saves tokens, and is never used as evidence.
+
+**Tool contract.** Each tool has:
+- a name;
+- a JSON schema for its input;
+- a class: read, talk, propose or gated (high-level design §4.4);
+- an idempotency key derived from the case and the call.
+
+`policy.dispatch` handles each class differently:
+- **read:** returns data;
+- **talk:** sends approved catalog templates only, never free text to a counterparty;
+- **propose:** writes a pending record and returns its ID;
+- **gated:** returns `approval_requested` until the stored approvals exist. It cannot be overridden from inside the loop.
+
+**Stop rules:**
+- at most 6 steps and 60 s per run;
+- at most 3 runs per case per day before a person is asked in the console;
+- a run never waits on a person. It stops, and the person's answer arrives later as a new event.
+
+**Fallback:** the deterministic template path for that trigger. It asks a yes/no question or offers buttons, and a console task is opened.
+
+### 7.7 Model adapter and routing
+```text
+models.complete(route, context, tools?, schema?) -> {kind, text?, tool_calls?, data?, stop, usage, cost}
+models.transcribe(audio, lang_hint, vocab) -> {text, lang, confidence}
+models.speak(text, lang, voice) -> audio
+models.read_image(image, schema) -> {data, confidence}
+```
+
+**Set-ups** are named in configuration. Each says where a model runs and how it is reached:
+- a **proprietary model** reached with an API key;
+- an **India-built model** reached with an API key;
+- an **open-weight model** served locally on the shop's or the association's computer.
+
+**Routes** map a task to a set-up and its limits. The defaults below are changed in configuration only:
+
+| Route | Task | Default set-up | Fallback |
+|---|---|---|---|
+| `extract` | A voice-note transcript → intent and details (schema) | A small, fast model | A stronger model |
+| `vision` | A scale or purity photo → reading (schema) | A vision-capable model | A local vision model, then the seven-segment decoder |
+| `agent` | Re-plans, clarifications, dispute drafts (tool loop) | The strongest available model | Deterministic template path |
+| `stt`, `tts` | Speech in 22 languages + English | India-built speech models | Local speech models or recorded clips |
+
+**Rules:**
+- A route may change set-up only after the full scenario suite and the accuracy sets pass on the new one (§14.1).
+- Usage and cost are logged per call and summed per case.
+- A per-tenant budget switches the `agent` route to the fallback when it is exhausted.
+
 ## 8. Voice, replies and photos
 
 ### 8.1 Voice-to-text and language detection
 - **Input:** a voice note (WhatsApp sends OGG/Opus), with the person's preferred language as a hint, or automatic detection on first contact.
 - **Vocabulary hints:** up to 50 terms: the jeweller's karigar names, the karigar's jewellers, and item and trade words collected in the field.
+- **Model:** a speech-recognition model on the `stt` route (§7.7).
 - **Output:** the transcript in the speaker's language, plus an English gloss.
 - **Language detection:** if detection confidence is below 0.6, run again without the hint. If a different language is detected with confidence ≥ 0.8 twice in a row, offer to switch (buttons).
 - **Length:** notes up to 30 s are handled directly; longer ones (rare) are split at silences.
@@ -392,6 +475,7 @@ stateDiagram-v2
   - **yes:** hi *haan, ji, sahi, theek* · bn *hyan, thik* · ta *aamaa, sari* · te *avunu, sare* · kn *haudu, sari* · ml *athe, shari* · mr *ho, barobar* · gu *haa, barabar* · pa *haanji* · or *han* · ur *haan, ji* · as *hoi* · ne *ho, hajur* · en *yes, ok*;
   - **no:** *nahi, na, illa, illai, ledu, nako, no*.
   - Native reviewers extend the lists. Anything unmatched or mixed ("haan par…") goes to the interpreter.
+- **Interpreter:** an LLM call on the `extract` route (§7.7) with a strict output schema.
 - **Interpreter input:** the transcript and its English gloss; the person's role; the pending question (what we asked); the details we expect; known names.
 - **Interpreter output (schema-validated):**
   - `intent`: confirm, reject, report_progress, report_delay, ask_balance, ask_payment, new_order, issue_details, return_details, dispute_claim, change_language, other;
@@ -415,7 +499,7 @@ stateDiagram-v2
 4. **Cross-check** against a spoken weight, if there is one. If they differ by more than max(2 × readability, 20 mg), ask which is right.
 5. **Read back** to the jeweller. On confirmation, the movement is proposed.
 
-**Fallbacks, in order:** the primary reader → an on-premise reader → a seven-segment decoder (find the bright display region, threshold it, split it into digit cells, decode each segment pattern, place the decimal point) → keypad entry, typed twice.
+**Fallbacks, in order:** the vision model on the `vision` route → a local vision model → a seven-segment decoder (find the bright display region, threshold it, split it into digit cells, decode each segment pattern, place the decimal point) → keypad entry, typed twice.
 
 **Test set:** at least 300 field photos from at least 10 scale models, split by scale model, so that the test photos come from scales never seen while tuning.
 
@@ -430,7 +514,7 @@ stateDiagram-v2
   - **The build fails if a P0 key in a Tier A language is not native-reviewed.**
   - Live translation is used only for rare free text, such as a dispute summary, and only **after** the jeweller approves the English version.
 - **P0 keys (about 60):** `consent.notice.*`, `agreement.readback.*`, `order.readback`, `plan.summary`, `receipt.issue|return.*`, `verdict.ok|noise|recheck.explain`, `checkin.*`, `replan.options.*`, `settlement.statement.*`, `payment.confirm`, `dispute.*`, `hisab.summary`, `escalation.*`, `error.retake.*`, `lang.switch.*`.
-- **Spoken output** comes from a live voice service where the language has one. For the remaining languages it comes from an on-premise voice service, or from **recorded clips**: every fixed phrase plus the number vocabulary (0–999, "thousand", "lakh", units, months) is prepared once per language and joined at runtime with 30 ms crossfades.
+- **Spoken output** comes from a text-to-speech model on the `tts` route where the language has one. For the remaining languages it comes from a local speech model, or from **recorded clips**: every fixed phrase plus the number vocabulary (0–999, "thousand", "lakh", units, months) is prepared once per language and joined at runtime with 30 ms crossfades.
 - **Caching:** all audio is cached by a hash of its content; fixed phrases are prepared at deploy time.
 
 ### 8.6 Languages and quality tiers
@@ -567,7 +651,7 @@ Operator fees accrue in a mock fee ledger, so the jobs story can be shown.
 | Property | Ledger invariants (§3.2), reconciliation monotonicity, idempotent replays | Every push |
 | Scenario | 32 end-to-end scenarios through the simulator, with the fake clock and recorded voice fixtures | Every push |
 | Accuracy | Reply understanding on field voice notes; scale reading on field photos; purity reading; re-plan feasibility | End of each sprint |
-| Provider conformance | The full scenario suite and the accuracy sets on each configured provider set-up | End of each sprint |
+| Model and provider conformance | The full scenario suite and the accuracy sets on each configured model set-up (API-key, India-built, local) and provider | End of each sprint, and before any route changes model |
 | Manual language check | Each Tier A and B language: listen to the 10 key spoken messages and read the cards | Before the pilot and the finale |
 
 ### 14.2 The 32 scenarios
@@ -610,13 +694,14 @@ Voice fixtures are prepared once and stored, so test runs are deterministic. Liv
 | Voice notes | Consented field recordings and the pilot | ≥ 150 notes from ≥ 20 speakers | ≥ 95% correct details after read-back |
 | Voice-receipt comprehension | Pilot karigars | ≥ 10 people | ≥ 90% restate the weight and the date |
 | Reconciliation simulation | Generated | 10,000 returns | ≤ 1% false 🔴; a seeded 0.5% leak caught within 5 jobs ≥ 90% of the time |
+| Agent loop | The 32 scenarios, on every model set-up | 32 × each set-up | ≥ 90% task success; **100%** approval-gate compliance; 0 false accusations; cost per scenario reported |
 
 ### 14.5 Continuous integration
 - **On every push:** lint → type checks → unit and property tests → the scenario suite → the app build.
 - **A manual accuracy workflow** (with secrets) runs the accuracy sets and the provider conformance suite and publishes reports. It refuses to run if its estimated cost exceeds a set budget.
 
 ## 15. Deployment and configuration
-- **Processes:** an API service (stateless: webhooks, app and console endpoints, simulator socket, signed media); workers (inbox, engine, timers, outbox, background jobs; row locks make several replicas safe); one relational database (the only stateful store); an encrypted media store; an optional on-premise voice service; an HTTPS entry point for webhooks.
-- **Configuration:** each adapter (messaging, calls, voice, photo reading, payments, partners) is chosen by configuration, with no code change. Secrets come from environment variables. An example configuration file with no secrets is committed.
+- **Processes:** an API service (stateless: webhooks, app and console endpoints, simulator socket, signed media); workers (inbox, engine, timers, outbox, background jobs; row locks make several replicas safe); one relational database (the only stateful store); an encrypted media store; optional local AI models (an open-weight LLM, speech and vision); an HTTPS entry point for webhooks.
+- **Configuration:** each adapter (messaging, calls, payments, partners) and each model route (§7.7) is chosen by configuration, with no code change. Secrets come from environment variables. An example configuration file with no secrets is committed.
 - **Environments:** demo tenants with the virtual clock and a reset button; pilot tenants with real numbers and real people.
 - **Real versus simulated in the prototype:** WhatsApp messaging, voice, the ledger, the maths, the engine, UPI intent links, the app and the console are **real**. Payouts (sandbox), hallmarking results, the lender and insurer, calls in P0, SMS and GST filing (documents only) are **sandbox or mock**, and labelled as such everywhere.

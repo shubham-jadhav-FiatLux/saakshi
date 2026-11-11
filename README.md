@@ -1,9 +1,9 @@
 # Saakshi: gold never moves without two confirmations
 
-**Tech4Bharat 2026 (GAVS Hackathon) · Theme 2 Jeweltech · Problem statement 2.2 · Team FiatLux**
+**Tech4Bharat 2026 (GAVS Hackathon) · Theme 2 Jeweltech · Problem statement 2.2 · Agentic AI · Team FiatLux**
 > *"Gold given to karigars for job-work is tracked on trust, and disputes follow."* (problem statement 2.2)
 
-Saakshi (साक्षी, "witness") is a **two-key gold record**, with an agent that runs every job-work order from issue to payment.
+Saakshi (साक्षी, "witness") is a **two-key gold record**, with an AI agent that runs every job-work order from issue to payment.
 - **The jeweller** photographs the scale and speaks.
 - **The karigar** hears a spoken receipt on WhatsApp **in any of India's 22 scheduled languages** and says "haan".
 - **Both** keep the same receipt.
@@ -64,7 +64,7 @@ Full landscape: [docs/problem-and-landscape.md](docs/problem-and-landscape.md).
 The karigar needs no new app, no typing and no English. The same flow, drawn through every part of the system, is in the [high-level design §5.1](docs/high-level-design.md#51-issue-with-two-keys-the-core-flow).
 
 ## 4. How the agent works
-Saakshi is not a register that waits to be written in. **An agent owns each order from issue to payment.**
+Saakshi is not a register that waits to be written in. **An AI agent owns each order from issue to payment.**
 
 | | What the agent does |
 |---|---|
@@ -78,6 +78,19 @@ Saakshi is not a register that waits to be written in. **An agent owns each orde
 - **Both parties:** every issue, return, change of terms, settlement and dispute resolution.
 - **The jeweller:** customer updates.
 - **The karigar:** any sharing of their record.
+
+**Under the hood: an agentic AI workflow.**
+- A large language model (LLM) runs in a ReAct-style loop. It reads the case, reasons, calls a tool, sees the result and repeats until the task is done or a person must decide.
+  - Its tools include sending a check-in, placing a call, and proposing a plan, a return or a settlement.
+- Saakshi's case engine is the harness around the LLM:
+  - tools with strict schemas;
+  - memory of every case;
+  - durable timers;
+  - a policy gate that blocks any action without the right approvals.
+- The LLM handles language and judgement. Weights, verdicts, balances and payments are always computed by deterministic code.
+- Routine steps, such as a button tap or a clear "haan", never need the LLM at all.
+
+Details: [high-level design §4.4](docs/high-level-design.md#44-the-agent-loop-agentic-ai).
 
 ## 5. Fairness by design
 Every return is checked in **pure (fine) gold**, allowing for the normal error of scales and purity machines. The result is one of three plain-language verdicts.
@@ -102,9 +115,15 @@ The maths, with worked test cases: [low-level design §5](docs/low-level-design.
 - **Voice first, buttons as a fallback,** for people with limited literacy and 14-hour working days.
 - **Entry-level Android and patchy networks.** The jeweller's app works offline.
 - **Assisted mode.** JanAI Café operators and Saakshi points (testing shops, hallmarking centres, association desks) can onboard people and confirm on their behalf, with consent.
-- **Runs anywhere.** Every outside service sits behind a replaceable adapter, so Saakshi can run in the cloud or entirely on a shop's or an association's own computer.
-  - No lock-in, lower cost, and the data can stay local.
-  - Every rule that touches gold or money is fixed in Saakshi's own code; no outside service can change a weight, a verdict or a payment.
+- **Any AI model, run anywhere.** The LLM, speech and photo-reading models sit behind one model adapter. Each can be one of:
+  - a proprietary model used with an API key;
+  - an India-built model;
+  - an open-weight model running locally on a shop's or an association's own computer, when cost or privacy matters.
+
+  This means:
+  - no lock-in, lower cost, and the data can stay local;
+  - every model set-up must pass the same 32 test scenarios before it is used;
+  - every rule that touches gold or money is fixed in Saakshi's own code, so no model can change a weight, a verdict or a payment.
 
 ## 7. Architecture
 
@@ -112,27 +131,28 @@ The maths, with worked test cases: [low-level design §5](docs/low-level-design.
 flowchart LR
   CH["1. Channels<br/>WhatsApp voice and buttons<br/>voice calls · simple jeweller app<br/>assisted desks"]
   SP["2. Voice and photos<br/>22 languages heard and spoken<br/>scale and purity photos read<br/>everything read back"]
-  AG["3. The agent<br/>plan · follow up · re-plan<br/>reconcile · settle<br/>memory of every case"]
+  AG["3. The AI agent<br/>LLM + tools + memory<br/>plan · follow up · re-plan<br/>reconcile · settle"]
   RU["4. Rules and approvals<br/>who must confirm what<br/>no yes, no movement"]
   LE["5. Shared ledger<br/>tamper-evident<br/>identical for both parties<br/>corrections are new entries"]
   CH --> SP --> AG --> RU --> LE
   CV["Consent and privacy vault"] -.- AG
-  AD["Replaceable adapters<br/>cloud or fully on-premise"] -.- SP
+  AD["Any AI model<br/>API key or fully local"] -.- SP
+  AD -.- AG
   PA["Partners, with consent<br/>UPI payments · hallmarking centres<br/>lenders · insurers"] -.- RU
 ```
 
 Each layer can be replaced without touching the others. The agent can propose, but **only the rules and both parties' confirmations can move gold or money.**
 
 **For technical readers:**
-- [High-level design](docs/high-level-design.md): principles, actors, the five layers and their components, every key flow with sequence and state diagrams, data overview, deployment, non-functional targets, failure handling, and how the design meets each requirement of statement 2.2.
-- [Low-level design](docs/low-level-design.md): modules, every entity and invariant, ledger posting rules and the hash chain, the reconciliation maths with test vectors, planner and settlement formulas, state machines and timers, voice, reply and photo pipelines, WhatsApp templates, endpoints and events, security, and the 32 test scenarios.
+- [High-level design](docs/high-level-design.md): principles, actors, the five layers and their components, the agent loop and its tools, every key flow with sequence and state diagrams, data overview, deployment, non-functional targets, failure handling, and how the design meets each requirement of statement 2.2.
+- [Low-level design](docs/low-level-design.md): modules, every entity and invariant, ledger posting rules and the hash chain, the reconciliation maths with test vectors, planner and settlement formulas, state machines and timers, the agent loop, tool contracts and model routing, voice, reply and photo pipelines, WhatsApp templates, endpoints and events, security, and the 32 test scenarios.
 
 ## 8. What is new
 1. **Two-key receipts by voice:** the first gold record that the karigar holds and confirms in their own language, without typing.
 2. **Measurement-aware fairness:** tells normal instrument error apart from real loss, so honest people are never accused.
-3. **An agent, not a register:** plans, follows up, re-plans and settles, and asks a human at every decision that matters.
+3. **An AI agent, not a register:** an LLM in a tool-using loop that plans, follows up, re-plans and settles, and asks a human at every decision that matters.
 4. **Every Indian language:** the same spoken receipt in all 22 scheduled languages.
-5. **Runs anywhere,** including fully offline on a shop's own computer.
+5. **Any AI model, run anywhere:** proprietary or open-weight models, in the cloud or fully offline on a shop's own computer.
 6. **Trust that travels:** a record of work delivered that the karigar owns and shares only with consent.
 
 ## 9. Who benefits

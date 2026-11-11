@@ -8,12 +8,12 @@
 ---
 
 ## 1. What the system does
-Saakshi is a neutral record of gold job work that **both** the jeweller and the karigar hold, plus an agent that runs each order from issue to payment.
+Saakshi is a neutral record of gold job work that **both** the jeweller and the karigar hold, plus an AI agent that runs each order from issue to payment.
 
 - **Two keys.** Every gold movement (an issue, a return of pieces, a return of scrap, a correction) is read from an instrument, read back, and confirmed by **both** parties before it counts.
 - **Both sides hold it.** Each party sees and hears the same record in their own language, by voice or buttons on WhatsApp. The karigar needs no new app.
 - **Fair maths.** Returns are reconciled in fine (pure) gold, allowing for the normal error of scales and purity machines.
-- **An agent, not a register.** It plans each order back from the occasion date, follows up, re-plans, reconciles, prepares the settlement and recovers from silence or failure.
+- **An AI agent, not a register.** An LLM in a tool-using loop (§4.4) plans each order back from the occasion date, follows up, re-plans, reconciles, prepares the settlement and recovers from silence or failure. It always stays inside the approval rules.
 - **Two-party money.** A settlement needs both parties' approval; a payment also needs the jeweller's PIN.
 - **Trust that travels (P1).** A karigar's record becomes a signed, consented passport for new jewellers, lenders and insurers.
 
@@ -28,8 +28,9 @@ Saakshi is a neutral record of gold job work that **both** the jeweller and the 
 | 5 | **One calculation for both sides** | All maths is deterministic and uses integers: milligrams (mg), parts per million (ppm) and paise. |
 | 6 | **Messages are data, not commands** | Nothing anyone says or sends can change a record, except as a proposal that the other party confirms. |
 | 7 | **No public scores, no blacklists** | Dispute outcomes stay between the two parties. |
-| 8 | **Replaceable adapters** | Messaging, calls, voice, photo reading, payments and partners each sit behind an adapter. A provider can be changed by configuration, and the whole system can run on-premise. |
+| 8 | **Replaceable adapters, any AI model** | Messaging, calls, payments, partners and every AI model (the LLM, speech, and photo reading) sit behind adapters. A provider or model is changed by configuration: a proprietary model with an API key, or an open-weight model running locally. The whole system can run on-premise. |
 | 9 | **Mocks are labelled** | Anything simulated says so in the app, in messages and in demos. |
+| 10 | **The LLM never computes or moves value** | The LLM reads language and proposes. Weights come from instruments; verdicts, balances and payments come from deterministic code; posting needs both keys. |
 
 ## 3. Actors and external systems
 
@@ -91,7 +92,8 @@ flowchart TB
     PR["Purity reader"]
     SPK["Spoken receipts<br/>live voice or recorded clips"]
   end
-  subgraph AG["3 · The agent (case engine)"]
+  subgraph AG["3 · The AI agent (LLM loop in the case engine)"]
+    LLM["LLM reasoning loop<br/>think, call a tool, observe"]
     PL["Planner and karigar ranking"]
     FU["Follow-ups and timers"]
     RP["Re-planner"]
@@ -116,6 +118,7 @@ flowchart TB
     REN["Renderer<br/>cards, narrated video, voice notes"]
     AUD["Audit timeline"]
     PAD["Partner adapters<br/>UPI, payouts, hallmarking, lenders"]
+    MAD["Model adapter<br/>any LLM, speech or vision model<br/>API key or local"]
   end
   CH --> VP --> AG --> RU --> LE
   XC -.- AG
@@ -130,11 +133,12 @@ flowchart TB
 | Jeweller app | 1 | Capture (camera with a guide box, voice note), karigars, jobs, approvals, settlement; works offline on entry-level Android | P0 |
 | Operator and admin console | 1 | Case timeline, chain verifier, operator tasks, assisted confirmation, language gallery, demo clock | P0 |
 | Two-phone simulator | 1 | A jeweller phone and a karigar phone in the browser, on exactly the same engine path; the demo fallback and the test channel | P0 |
-| Voice-to-text | 2 | Turns a voice note into text in the speaker's language, with language detection and an English gloss | P0 |
-| Reply interpreter | 2 | Recognises yes and no in every language instantly; turns other replies into an intent and details; asks back when unsure | P0 |
-| Scale-photo reader | 2 | Reads the weight from a photo of the scale display, with checks for unit, stability, tare and reused photos | P0 |
+| Voice-to-text | 2 | A speech-recognition model turns a voice note into text in the speaker's language, with language detection and an English gloss | P0 |
+| Reply interpreter | 2 | Recognises yes and no in every language instantly from word lists; an LLM with a strict output schema turns other replies into an intent and details; asks back when unsure | P0 |
+| Scale-photo reader | 2 | A vision model reads the weight from a photo of the scale display; rule checks cover unit, stability, tare and reused photos | P0 |
 | Purity reader | 2 | Reads fineness from a photo of the purity-machine screen or printout, or takes a typed or spoken value | P0 |
 | Spoken receipts | 2 | Speaks every receipt and question in the person's language | P0 |
+| LLM reasoning loop | 3 | Handles judgement and exceptions: ambiguous replies, re-plan options, dispute summaries, odd situations. Calls tools in a loop; every call is schema-checked and gated (§4.4). | P0 |
 | Planner and ranking | 3 | Plans back from the occasion date; ranks karigars by skill, load, on-time record and gold-limit headroom | P0 |
 | Follow-ups and timers | 3 | Check-ins, reminders, calls and escalations on durable timers, with quiet hours | P0 |
 | Re-planner | 3 | Proposes options when work slips (extend, split, reassign, speed up hallmarking, inform the customer); every option is checked against dates and capacity | P0 |
@@ -152,6 +156,7 @@ flowchart TB
 | Renderer | × | Receipt cards in every Indian script, narrated video for templates, voice notes | P0 |
 | Audit timeline | × | Records every event, decision, approval, timer and outside call | P0 |
 | Partner adapters | × | UPI links (real), payouts (sandbox), hallmarking and lender (mock in the prototype) | P0 / P1 |
+| Model adapter | × | One interface over the LLM, speech and vision models. Set-ups for API-key, India-built and local open-weight models; routes each task to a configured model. | P0 |
 
 ### 4.3 How one message moves through the system
 
@@ -165,6 +170,82 @@ flowchart TB
 | 6 | The outbox renders the card, voice and video (cached when possible), uploads the media and sends | Worker | 1–4 s |
 
 **Targets (median):** karigar says "haan" → both receipts in **≤ 8 s**; jeweller's photo and voice note → read-back in **≤ 15 s**.
+
+Routine replies (a button tap, a clear "haan") never reach the LLM. Exceptions go to the agent loop (§4.4): an ambiguous reply, a slip, silence or a dispute. Its proposals pass through the same handler and policy gate as everything else.
+
+### 4.4 The agent loop (agentic AI)
+**The agent is an LLM inside a harness.** The LLM runs a ReAct-style loop:
+1. It reads the case.
+2. It reasons about what to do next.
+3. It calls one tool.
+4. It observes the result, and repeats.
+
+The loop ends when the task is done, when a person must decide, or when a step or time limit is reached. **The harness is Saakshi's case engine**, which provides:
+- the tools, each with a strict schema;
+- the memory, which is the event log of the case plus profiles;
+- durable timers that wake the agent;
+- the policy gate, which runs every gated action only with stored approvals.
+
+```mermaid
+flowchart TD
+  EV["Trigger<br/>an unclear reply, a timer, a slip,<br/>silence, a dispute"] --> CTX["Build context<br/>case events + summary,<br/>profiles, agreement, tool list"]
+  CTX --> LLM{"LLM reasons:<br/>reply, call a tool, or finish?"}
+  LLM -->|"call a tool"| VAL["Validate the call<br/>strict schema, idempotency key"]
+  VAL --> GATE{"Policy gate"}
+  GATE -->|"read-only or reversible"| RUN["Run the tool<br/>and record it in the audit timeline"]
+  GATE -->|"propose_*"| PEND["Create a pending record<br/>that the right people must confirm"]
+  GATE -->|"gated, no approval yet"| ASK["Ask the right person to approve"]
+  RUN --> OBS["Observation"]
+  PEND --> OBS
+  ASK --> OBS
+  OBS --> LLM
+  LLM -->|"finish, or limit reached"| STOP["Stop: done, or waiting for a person.<br/>Invalid output or timeout:<br/>deterministic template path"]
+```
+
+**Where the LLM is used, and where it isn't**
+
+| Situation | Handled by | LLM? |
+|---|---|---|
+| A button tap (Haan, Nahi, Hisab) or a clear yes/no word | Deterministic flow | No |
+| A templated outbound message | Template and speech | No |
+| A scale or purity photo | Vision model with structured output, then rule checks and read-back | Yes (extraction) |
+| A free-form voice note or text | Speech-to-text, then the LLM extracts intent and details | Yes (extraction) |
+| An ambiguous reply ("hmm, kal dekhte hain") | A clarifying question or options | Yes |
+| A slip, silence or a capacity clash | The agent loop proposes re-plan options with their time and gold impact | Yes (reasoning) |
+| A dispute summary or evidence pack | The agent loop drafts neutral wording; the jeweller approves | Yes (reasoning) |
+| Every number, verdict and balance | Reconciliation and ledger code | **Never** |
+
+**Tools the agent can call**
+
+| Class | Tools | Rule |
+|---|---|---|
+| Read | `get_case`, `get_profile`, `get_balances`, `get_agreement`, `list_open_jobs`, `compute_reconciliation`, `suggest_assignment`, `read_scale_photo` | Free to call; the maths and ranking inside them are deterministic |
+| Talk | `send_template_message`, `place_call`, `schedule_checkin`, `request_retake` | Approved templates only; logged; reversible |
+| Propose | `propose_issue`, `propose_return`, `propose_plan`, `propose_replan`, `propose_settlement`, `propose_limit_change`, `open_dispute`, `propose_resolution` | Create a **pending** record that the counterparty and/or the jeweller must confirm |
+| Gated | `notify_customer`, `initiate_payout`, `share_passport`, `submit_hallmark_request` | Run only with stored approvals: the jeweller's tap, both parties plus a PIN for payouts, the karigar's spoken consent for sharing |
+
+**The model never writes to the ledger.** It can only propose; people confirm; the ledger code appends.
+
+**How much the agent does on its own**
+- **Alone:** reminders, check-ins, calls, retake requests, clarifying questions, re-plan options, drafts, explanations of a verdict in each person's language.
+- **Never alone:** moving gold or money, changing terms, contacting a customer, sharing a record. These always wait for the right person's yes.
+
+**Any AI model**
+- **One model adapter** sits in front of every AI task: the LLM, speech-to-text, text-to-speech and photo reading. A model set-up is chosen in configuration, not code, and can be any of:
+  - a proprietary model with an API key;
+  - an India-built model;
+  - an open-weight model running locally on the shop's or the association's computer, when cost or privacy matters.
+- **Routing by task:**
+  - a small, fast model is enough for yes/no and extraction;
+  - a stronger model handles re-planning and dispute summaries;
+  - each route can use a different set-up.
+- **Measured, not assumed:** every model set-up must pass the same 32 scenarios (low-level design §14) before it is switched on, including 100% approval-gate compliance. A cheaper or local model can misread a reply, but read-back and confirmation catch that. It can never change a weight, a verdict or a payment.
+
+**Guardrails**
+- **Messages are data, not instructions.** Nothing a party says can change a record except through a `propose_*` tool and the counterparty's confirmation. Prompt-injection cases are part of the test scenarios.
+- **Strict schemas, checked before every tool runs;** idempotency keys on every write.
+- **Neutral wording.** A message that describes the other party, such as a dispute summary, needs the jeweller's approval and passes a neutral-wording check.
+- **Fallbacks.** A refusal, timeout or invalid output gets one retry, then the deterministic template path with buttons. A person in the console sees it.
 
 ## 5. Key flows
 
@@ -297,7 +378,7 @@ flowchart LR
     WK["Workers<br/>inbox, engine, timers, outbox"]
     DB[("Relational database<br/>the only stateful store")]
     OBJ[("Encrypted media store")]
-    VOX["On-premise voice service<br/>optional"]
+    VOX["Local AI models, optional<br/>open-weight LLM, speech, vision"]
   end
   WA2 -->|"HTTPS"| API
   PH -->|"HTTPS"| API
@@ -305,11 +386,11 @@ flowchart LR
   WK --> DB
   WK --> OBJ
   WK --> VOX
-  WK -->|"adapters"| EXT["Messaging, calls, voice,<br/>payments, partners"]
+  WK -->|"adapters"| EXT["Messaging, calls, payments,<br/>partners, AI models by API key"]
 ```
 
 - **It starts small:** one modest server for a pilot cluster. The API and the workers are stateless and scale out; the database is the only stateful store.
-- **It can run on-premise,** for example on an association's or a large jeweller's own computer, so the data stays local.
+- **It can run on-premise,** for example on an association's or a large jeweller's own computer, so the data stays local. With open-weight models running locally, no message, voice note or photo has to leave that computer.
 - **Webhooks need public HTTPS;** everything else can stay on a private network.
 
 ## 8. Non-functional requirements (targets)
@@ -323,6 +404,7 @@ flowchart LR
 | Understanding replies | **≥ 95%** correct details after read-back, on ≥ 150 real voice notes from ≥ 20 speakers |
 | Voice receipts | **≥ 90%** of pilot karigars restate the weight and the date correctly after hearing one |
 | Fairness | **≤ 1%** false 🔴 on 10,000 simulated returns; a seeded 0.5% leak detected within 5 jobs **≥ 90%** of the time |
+| Agent | On the 32 scenarios, for every model set-up: **≥ 90%** task success, **100%** approval-gate compliance, **0** false accusations; cost per scenario reported |
 | Devices and networks | Karigars need only WhatsApp. The jeweller app works offline on entry-level Android and syncs without duplicates |
 | Languages | All 22 scheduled languages + English, each with a published quality tier |
 | Privacy | Consent per purpose; erasure on request; raw audio kept 30 days and photos 180 days by default |
@@ -344,6 +426,7 @@ flowchart LR
 | Hallmark failure | Hallmarking result | Evidence pack and a rework proposal | Both approve the cost split |
 | Changed phone number | Bounce, or a new number claiming the identity | Verified through the jeweller plus a one-time code, or at a café | — |
 | An outside service is down | Timeout or error | Backoff, then the next provider or the fallback path (buttons, keypad, recorded clips) | Shown in the console |
+| LLM refusal, timeout or invalid output | Stop reason, schema validation | One retry, optionally on a fallback model, then the deterministic template path | A person in the console |
 
 ## 10. Security and privacy (summary)
 - **Personal data** (names, phone numbers, UPI IDs) is encrypted with a separate key per person. The ledger holds only pseudonymous IDs.
@@ -365,11 +448,11 @@ Details: [low-level design §12](low-level-design.md#12-security-and-privacy).
 | Settlements approved by both | Settlement state machine: both approvals plus the jeweller's PIN (§5.5) |
 | Each karigar's full access to their own account | "Mera hisab" by voice, across every jeweller (§5.7) |
 | Following the money | Passport, gold limits, hallmark linkage (§5.9, P1) |
-| **Plan** | Back-planning from the occasion date; karigar ranking (§5.2, §5.3) |
-| **Act in external systems** | WhatsApp, calls, UPI, payouts, hallmarking (sandboxed where noted) (§3) |
-| **Keep memory of the case** | An event log per case, plus profiles (§4.2) |
-| **Recover from failures** | Fallback ladder, retries, re-plans, alternative inputs (§9) |
-| **Human approval before money, legal commitments or personal data** | Policy gate and approval records (§2, §4.2) |
+| **Plan** | Back-planning from the occasion date; karigar ranking; the LLM agent proposes re-plans (§4.4, §5.2, §5.3) |
+| **Act in external systems** | The agent's tools: WhatsApp, calls, UPI, payouts, hallmarking (sandboxed where noted) (§3, §4.4) |
+| **Keep memory of the case** | An event log per case, plus profiles, given to the LLM as context (§4.2, §4.4) |
+| **Recover from failures** | Fallback ladder, retries, re-plans, alternative inputs, a deterministic path when the LLM fails (§4.4, §9) |
+| **Human approval before money, legal commitments or personal data** | Policy gate and approval records; propose-only tools (§2, §4.4) |
 | Voice-first, vernacular, low literacy | Voice notes and buttons in 22 languages + English; spoken receipts (§4.2) |
 | Entry-level Android, intermittent connectivity | WhatsApp-only for karigars; offline-first jeweller app (§8) |
 | Assisted path | Café operators and Saakshi points with assisted confirmation (§5.8) |
