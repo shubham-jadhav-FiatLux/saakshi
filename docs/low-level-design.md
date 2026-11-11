@@ -669,14 +669,14 @@ S01 and S04 run in six languages, including at least two that use the universal 
 id: S19_purity_within_noise
 setup:
   tenant: {name: Lakshmi Jewellers, lang: kn-IN}
-  karigar: {name: Rafiq, lang: bn-IN, channel: simulator}
+  karigar: {name: Rafiq, lang: mr-IN, channel: simulator}
   agreement: {allowance: {plain_22k: {pct_ppm: 40000, basis: issued_fine}}, noise_rule: ignore}
 steps:
   - jeweller.capture: {photo: scale/48250_a.jpg, voice: "voice:kn-IN:Rafiq ge eradu bale, 22 carat, December 12"}
   - expect.readback: {weight_mg: 48250}
   - jeweller.press: confirm
-  - karigar.expect_template: {name: saakshi_receipt, lang: bn}
-  - karigar.voice: "voice:bn-IN:হ্যাঁ, ঠিক আছে"
+  - karigar.expect_template: {name: saakshi_receipt, lang: mr}
+  - karigar.voice: "voice:mr-IN:हो, बरोबर आहे"
   - expect.ledger: {account: custody, fine_mg: 44197}
   - clock.advance: 5d
   - jeweller.capture_return: {pieces: [{photo: scale/45900_b.jpg, purity_ppm: 912000, method: xrf}],

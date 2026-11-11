@@ -57,8 +57,8 @@ Full landscape: [docs/problem-and-landscape.md](docs/problem-and-landscape.md).
 | 1 | Jeweller | Photographs the scale and says, in Kannada, *"ರಫೀಕ್‌ಗೆ ಎರಡು ಬಳೆ, 22 ಕ್ಯಾರೆಟ್, ಡಿಸೆಂಬರ್ 12ರೊಳಗೆ"* ("two bangles for Rafiq, 22 carat, by 12 December") |
 | 2 | Saakshi | Reads the scale photo (**48.250 g**) and reads the details back |
 | 3 | Jeweller | Says "haudu" (yes) or taps Confirm: **the first key** |
-| 4 | Saakshi | Plans back from 12 December and sends Rafiq a spoken receipt on WhatsApp **in Bengali**: *"রফিক ভাই, আপনি ৪৮.২৫০ গ্রাম সোনা পেয়েছেন…"* |
-| 5 | Karigar | Says **"hyan"** (yes) or taps a button: **the second key** |
+| 4 | Saakshi | Plans back from 12 December and sends Rafiq a spoken receipt on WhatsApp **in Marathi**: *"रफीकभाऊ, तुम्हाला ४८.२५० ग्रॅम सोने मिळाले आहे…"* ("Rafiq bhau, you have received 48.250 g of gold…") |
+| 5 | Karigar | Says **"ho"** (yes) or taps a button: **the second key** |
 | 6 | Both | See **the same receipt with the same short code**. The gold has moved with two confirmations. |
 
 The karigar needs no new app, no typing and no English. The same flow, drawn through every part of the system, is in the [high-level design §5.1](docs/high-level-design.md#51-issue-with-two-keys-the-core-flow).
@@ -224,7 +224,7 @@ Each layer can be replaced without touching the others. The agent can propose, b
 | 23 Nov–13 Dec | Build in three sprints: **(1) two-key receipts in every language → (2) the agent: planning, follow-ups, settlement, disputes → (3) trust that travels: hallmark links, gold limits, karigar passport** |
 | 14–15 Dec | Prototype submission with a demo video |
 | 16–26 Dec | Live pilot in Bengaluru |
-| 27 Dec | Finale demo: brass props on a real scale, a Kannada-speaking jeweller and a Bengali-speaking karigar, live |
+| 27 Dec | Finale demo: brass props on a real scale, a Kannada-speaking jeweller and a Marathi-speaking karigar, live |
 | From Jan 2027 | Paid pilots, then the next cluster |
 
 ## Documents in this repository

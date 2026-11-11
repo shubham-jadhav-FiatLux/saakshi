@@ -260,14 +260,14 @@ sequenceDiagram
   participant AG as Agent
   participant RU as Rules
   participant LE as Ledger
-  actor K as Karigar (Bengali)
+  actor K as Karigar (Marathi)
   J->>CH: Scale photo and voice note
   CH->>VP: Media
   VP->>AG: Reading 48.250 g, 22K, 2 bangles, due 12 Dec
   AG->>J: Read-back card and voice, with buttons
   J->>RU: "haudu" (yes), key 1
-  AG->>K: Spoken receipt in Bengali on WhatsApp
-  K->>RU: "hyan" (yes), key 2
+  AG->>K: Spoken receipt in Marathi on WhatsApp
+  K->>RU: "ho" (yes), key 2
   RU->>LE: Both keys stored, post the issue
   LE-->>AG: New chain head, code SKS-7F3A
   AG->>J: Receipt with code SKS-7F3A
