@@ -236,4 +236,4 @@ Each layer can be replaced without touching the others. The agent can propose, b
 - [Pitch deck (PDF)](deck/Saakshi_Tech4Bharat_PS2.2.pdf)
 
 ## Team
-**FiatLux**: Shubham Jadhav (founder: product, field research, design and build).
+**FiatLux**: Shubham Jadhav, IIT Madras (founder: product, field research, design and build).
